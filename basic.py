@@ -23,15 +23,20 @@ class BasicLexer(Lexer):
         MINUS,
         MULTIPLY,
         DIVIDE,
+        EQUALS,
+        COLON,
     }
-
-    literals = {'=', ':'}
 
     ignore = ' '
     ignore_comments = '(?:: *)?REM.*'
 
     def ignore_comments(self, token):
-        if token.index and self.text[:token.index] != (token.index - 1) * ' ':
+        if(
+            token.index
+            and self.text[:token.index] != token.index * ' '
+            and not token.value.startswith(':')
+        ):
+            # These will be rejected by the parser
             token.type = 'ID'
             return token
 
@@ -39,16 +44,18 @@ class BasicLexer(Lexer):
     MINUS = r'-'
     MULTIPLY = r'\*'
     DIVIDE = r'\\'
+    EQUALS = r'='
 
     PRINT = r'PRINT'
     IF = r'IF'
     THEN = r'THEN'
     ELSE = r'ELSE'
-    LIST = r'LIST *:?'
+    LIST = r'LIST *(?::.*)?'
+    COLON = r':'
 
     ID = r'[A-Za-z_][A-Za-z0-9_]*'
 
-    @_(r'(:?[0-9]+(?:\.[0-9]*)?|\.[0-9]+)')
+    @_(r'(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)')
     def NUMBER(self, token):
         if(
             self.index
@@ -101,6 +108,10 @@ class LineLexer(Lexer):
 class BasicParser(Parser):
     tokens = BasicLexer.tokens.union(LineLexer.tokens)
     precedence = (
+        ('left', COLON),
+        ('left', IF, THEN),
+        ('left', ELSE),
+        ('left', EQUALS),
         ('left', PLUS, MINUS),
         ('left', MULTIPLY, DIVIDE),
         ('right', UNARY_MINUS),
@@ -114,7 +125,7 @@ class BasicParser(Parser):
         if parsed.statement:
             return [parsed.statement]
 
-    @_('statements ":" statement')
+    @_('statements COLON statement')
     def statements(self, parsed):
         parsed.statements.append(parsed.statement)
         return parsed.statements
@@ -138,7 +149,7 @@ class BasicParser(Parser):
         elif len(parsed) > 5:
             return parsed.statement1
 
-    @_('variable "=" expr')
+    @_('variable EQUALS expr')
     def statement(self, parsed):
         return ('set_variable', parsed.variable.name, parsed.expr)
 
@@ -146,11 +157,7 @@ class BasicParser(Parser):
     def statement(self, parsed):
         return ('print', *parsed.exprs)
 
-    @_(
-        'LIST',
-        # Can't have statements after LIST somehow
-        'LIST ":" statements',
-    )
+    @_('LIST')
     def statement(self, parsed):
         return ('list',)
 
@@ -163,7 +170,7 @@ class BasicParser(Parser):
         parsed.exprs.append(parsed.expr)
         return parsed.exprs
 
-    @_('variable "=" expr')
+    @_('variable EQUALS expr')
     def expr(self, parsed):
         return self.interpreter.compare_variable(
             parsed.variable.name,
@@ -203,7 +210,7 @@ class BasicParser(Parser):
 
     @_('ID')
     def variable(self, parsed):
-        if parsed.ID == 'REM':
+        if parsed.ID.startswith('REM'):
             raise SyntaxError('REM is a reserved keyword')
 
         return Variable(parsed.ID)
@@ -257,6 +264,7 @@ class BasicInterpreter:
 
 
 if __name__ == '__main__':
+    # Eyeballed unit tests. KISS
     test_lines = (
         'A = 2',
         'A = A + 1',
