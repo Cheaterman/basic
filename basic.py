@@ -2,7 +2,7 @@ import collections
 import math
 
 from sly.lex import Lexer, Token
-from sly.yacc import Parser, YaccError
+from sly.yacc import Parser
 
 
 Variable = collections.namedtuple('Variable', ['name'])
@@ -43,7 +43,7 @@ class BasicLexer(Lexer):
     PLUS = r'\+'
     MINUS = r'-'
     MULTIPLY = r'\*'
-    DIVIDE = r'\\'
+    DIVIDE = r'/'
     EQUALS = r'='
 
     PRINT = r'PRINT'
@@ -219,7 +219,7 @@ class BasicParser(Parser):
         if not token:
             raise EOFError('Parse error in input, unexpected EOF')
 
-        raise YaccError(
+        raise SyntaxError(
             f'Syntax error at line {token.lineno}, token={token.type}'
         )
 
@@ -235,9 +235,6 @@ class BasicInterpreter:
         try:
             instructions = self.parser.parse(self.lexer.tokenize(line))
         except EOFError:
-            return
-
-        if not instructions:
             return
 
         for instruction, *args in instructions:
@@ -264,59 +261,5 @@ class BasicInterpreter:
 
 
 if __name__ == '__main__':
-    # Eyeballed unit tests. KISS
-    test_lines = (
-        'A = 2',
-        'A = A + 1',
-        'PRINT A',
-        '10 A = 5',
-        ' 10 A = 5',
-        '10.2 A = 5',
-        '10',
-        '  10',
-        '10  ',
-        '10     A = 5',
-        'LIST',
-        'PRINT 1 2 3',
-        'PRINT A = 3',
-        'PRINTA=3',
-        'PRINT"A"',
-        'PRINT"A"A',
-        'PRINT"A"REM',
-        'PRINT"A":REMTHISISIGNORED',
-        'PRINT "A" : REMTHISISIGNORED',
-        'REM THIS IS IGNORED',
-        '  REM THIS IS IGNORED',
-        'IF A THEN PRINT "B" ELSE PRINT "C"',
-        'IF 0 THEN PRINT "B" ELSE PRINT "C"',
-        'PRINT 3 * 4 + 5',
-        'PRINT 3 + 5 * -2',
-        'PRINTC',
-        'C=3',
-        'PRINTC',
-        'PRINT "A" : 10 PRINT "B"',
-    )
-
-    interpreter = BasicInterpreter()
-    lexer = interpreter.lexer
-    parser = interpreter.parser
-
-    for line in test_lines:
-        print('Tokenizing:', line)
-
-        for token in lexer.tokenize(line):
-            print(token)
-
-        print()
-
-
-    for line in test_lines:
-        print('Parsing:', line)
-
-        try:
-            interpreter.interpret(line)
-
-        except (YaccError, SyntaxError) as exception:
-            print('ERROR:', exception)
-
-        print()
+    # TODO: REPL
+    pass
