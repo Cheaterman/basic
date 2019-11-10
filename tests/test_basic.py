@@ -301,11 +301,13 @@ def test_rem_ignored(capsys, interpreter, expected_output):
     argvalues=(
         (('A = 3', 'IF A THEN PRINT "B" ELSE PRINT "C"'), 'B'),
         ('IF 0 THEN PRINT "B" ELSE PRINT "C"', 'C'),
+        ('IF 0 THEN PRINT "B"', ''),
+        ('IF 1 THEN PRINT "B"', 'B'),
     )
 )
 def test_conditionals(capsys, interpreter, expected_output):
     captured = capsys.readouterr()
-    assert captured.out == expected_output + '\n'
+    assert captured.out == expected_output + ('\n' if expected_output else '')
 
 
 @pytest.mark.parametrize(

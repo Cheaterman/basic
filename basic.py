@@ -6,6 +6,8 @@ from sly.yacc import Parser
 
 
 Variable = collections.namedtuple('Variable', ['name'])
+Expression = collections.namedtuple('Expression', ['operation', 'arguments'])
+Statement = collections.namedtuple('Statement', ['operation', 'arguments'])
 
 
 class BasicLexer(Lexer):
@@ -132,34 +134,37 @@ class BasicParser(Parser):
 
     @_('LINENO LINE')
     def statement(self, parsed):
-        return ('add_program_line', parsed.LINENO, parsed.LINE)
+        return Statement('add_program_line', (parsed.LINENO, parsed.LINE))
 
     @_('LINENO')
     def statement(self, parsed):
-        return ('remove_program_line', parsed.LINENO)
+        return Statement('remove_program_line', [parsed.LINENO])
 
     @_(
         'IF expr THEN statement',
         'IF expr THEN statement ELSE statement',
     )
     def statement(self, parsed):
-        if parsed.expr:
-            return parsed[3]
+        if len(parsed) <= 5:
+            return Statement('conditional', (parsed.expr, parsed.statement))
 
-        elif len(parsed) > 5:
-            return parsed.statement1
+        else:
+            return Statement(
+                'conditional',
+                (parsed.expr, parsed.statement0, parsed.statement1),
+            )
 
     @_('variable EQUALS expr')
     def statement(self, parsed):
-        return ('set_variable', parsed.variable.name, parsed.expr)
+        return Statement('set_variable', (parsed.variable.name, parsed.expr))
 
     @_('PRINT exprs')
     def statement(self, parsed):
-        return ('print', *parsed.exprs)
+        return Statement('print', parsed.exprs)
 
     @_('LIST')
     def statement(self, parsed):
-        return ('list',)
+        return Statement('list', [])
 
     @_('expr')
     def exprs(self, parsed):
@@ -172,30 +177,30 @@ class BasicParser(Parser):
 
     @_('variable EQUALS expr')
     def expr(self, parsed):
-        return self.interpreter.compare_variable(
-            parsed.variable.name,
-            parsed.expr,
+        return Expression(
+            'compare_variable',
+            [parsed.variable.name, parsed.expr],
         )
 
     @_('MINUS expr %prec UNARY_MINUS')
     def expr(self, parsed):
-        return -parsed.expr
+        return Expression('negative', [parsed.expr])
 
     @_('expr PLUS expr')
     def expr(self, parsed):
-        return parsed.expr0 + parsed.expr1
+        return Expression('add', [parsed.expr0, parsed.expr1])
 
     @_('expr MINUS expr')
     def expr(self, parsed):
-        return parsed.expr0 - parsed.expr1
+        return Expression('subtract', [parsed.expr0, parsed.expr1])
 
     @_('expr MULTIPLY expr')
     def expr(self, parsed):
-        return parsed.expr0 * parsed.expr1
+        return Expression('multiply', [parsed.expr0, parsed.expr1])
 
     @_('expr DIVIDE expr')
     def expr(self, parsed):
-        return parsed.expr0 / parsed.expr1
+        return Expression('divide', [parsed.expr0, parsed.expr1])
 
     @_(
         'NUMBER',
@@ -206,7 +211,7 @@ class BasicParser(Parser):
 
     @_('variable')
     def expr(self, parsed):
-        return self.interpreter.variables[parsed.variable.name]
+        return Expression('get_variable', [parsed.variable.name])
 
     @_('ID')
     def variable(self, parsed):
@@ -233,12 +238,81 @@ class BasicInterpreter:
 
     def interpret(self, line):
         try:
-            instructions = self.parser.parse(self.lexer.tokenize(line))
+            statements = self.parser.parse(self.lexer.tokenize(line))
         except EOFError:
             return
 
-        for instruction, *args in instructions:
-            getattr(self, instruction)(*args)
+        for statement in statements:
+            self.execute(*statement)
+
+    def execute(self, instruction, arguments):
+        return getattr(self, instruction)(*arguments)
+
+    def evaluate(self, expression):
+        evaluation_stack = collections.deque()
+        argument_index_stack = collections.deque()
+        node = expression
+        last_visited_node = None
+
+        while evaluation_stack or node is not None:
+            if node is not None:
+                evaluation_stack.append(node)
+
+                if isinstance(node, Expression):
+                    argument_index_stack.append(0)
+                    node = node.arguments[0]
+                else:
+                    node = None
+
+            else:
+                next_node = evaluation_stack[-1]
+
+                if(
+                    isinstance(next_node, Expression)
+                    and len(next_node.arguments) > 1
+                    and last_visited_node != next_node.arguments[1]
+                ):
+                    argument_index_stack.append(1)
+                    node = next_node.arguments[1]
+
+                elif argument_index_stack:
+                    last_visited_node = evaluation_stack.pop()
+                    evaluation_stack[-1].arguments[
+                        argument_index_stack.pop()
+                    ] = self.visit(next_node)
+
+                else:
+                    return self.visit(next_node)
+
+    def visit(self, node):
+        if not isinstance(node, Expression):
+            return node
+
+        return self.execute(*node)
+
+    def negative(self, a):
+        return -a
+
+    def add(self, a, b):
+        return a + b
+
+    def subtract(self, a, b):
+        return a - b
+
+    def multiply(self, a, b):
+        return a * b
+
+    def divide(self, a, b):
+        return a / b
+
+    def get_variable(self, name):
+        return self.variables.get(name, 0)
+
+    def set_variable(self, name, value):
+        self.variables[name] = self.evaluate(value)
+
+    def compare_variable(self, name, value):
+        return -1 if self.variables[name] == value else 0
 
     def add_program_line(self, lineno, line):
         self.program[lineno] = line
@@ -246,20 +320,16 @@ class BasicInterpreter:
     def remove_program_line(self, lineno):
         self.program.pop(lineno, None)
 
+    def conditional(self, expr, then_statement, else_statement=None):
+        if self.evaluate(expr):
+            self.execute(*then_statement)
+
+        elif else_statement:
+            self.execute(*else_statement)
+
     def list(self):
         for lineno, line in self.program.items():
             print(f'{lineno} {line}')
 
-    def set_variable(self, name, value):
-        self.variables[name] = value
-
-    def compare_variable(self, name, value):
-        return -1 if self.variables[name] == value else 0
-
     def print(self, *args):
-        print(*args)
-
-
-if __name__ == '__main__':
-    # TODO: REPL
-    pass
+        print(*(self.evaluate(arg) for arg in args))
