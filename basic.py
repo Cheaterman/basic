@@ -114,6 +114,7 @@ class BasicParser(Parser):
         ('left', IF, THEN),
         ('left', ELSE),
         ('left', EQUALS),
+        ('left', CREATE_EXPRS, APPEND_EXPRS),
         ('left', PLUS, MINUS),
         ('left', MULTIPLY, DIVIDE),
         ('right', UNARY_MINUS),
@@ -166,11 +167,11 @@ class BasicParser(Parser):
     def statement(self, parsed):
         return Statement('list', [])
 
-    @_('expr')
+    @_('expr %prec CREATE_EXPRS')
     def exprs(self, parsed):
         return [parsed.expr]
 
-    @_('exprs expr')
+    @_('exprs expr %prec APPEND_EXPRS')
     def exprs(self, parsed):
         parsed.exprs.append(parsed.expr)
         return parsed.exprs
