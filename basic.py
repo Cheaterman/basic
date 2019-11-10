@@ -17,9 +17,11 @@ class BasicLexer(Lexer):
         IF,
         THEN,
         ELSE,
+        LIST,
+        RUN,
+        GOTO,
         STRING,
         LINENO,
-        LIST,
         NUMBER,
         PLUS,
         MINUS,
@@ -47,13 +49,15 @@ class BasicLexer(Lexer):
     MULTIPLY = r'\*'
     DIVIDE = r'/'
     EQUALS = r'='
+    COLON = r':'
 
     PRINT = r'PRINT'
     IF = r'IF'
     THEN = r'THEN'
     ELSE = r'ELSE'
-    LIST = r'LIST *(?::.*)?'
-    COLON = r':'
+    LIST = r'LIST'
+    RUN = r'RUN'
+    GOTO = r'GOTO'
 
     ID = r'[A-Za-z_][A-Za-z0-9_]*'
 
@@ -164,6 +168,14 @@ class BasicParser(Parser):
     def statement(self, parsed):
         return Statement('list', [])
 
+    @_('RUN')
+    def statement(self, parsed):
+        return Statement('run_program', [])
+
+    @_('GOTO expr')
+    def statement(self, parsed):
+        return Statement('goto', [parsed.expr])
+
     @_('expr %prec CREATE_EXPRS')
     def exprs(self, parsed):
         return [parsed.expr]
@@ -233,17 +245,23 @@ class BasicInterpreter:
         self.parser = BasicParser(self)
         self.variables = collections.defaultdict(int)
         self.program = {}
+        self.running_program = False
 
     def interpret(self, line):
         try:
             statements = self.parser.parse(self.lexer.tokenize(line))
+
         except EOFError:
             if line.strip(' :').startswith('REM'):
                 return
+
             raise SyntaxError('Unexpected EOF')
 
         for statement in statements:
             self.execute(*statement)
+
+            if statement.operation in ('list', 'run_program', 'goto'):
+                break
 
     def execute(self, instruction, arguments):
         return getattr(self, instruction)(*arguments)
@@ -323,6 +341,52 @@ class BasicInterpreter:
 
     def remove_program_line(self, lineno):
         self.program.pop(lineno, None)
+
+    def run_program(self, lineno=None):
+        if not self.program:
+            return
+
+        self.running_program = True
+
+        linenos = sorted(self.program)
+        current_line_index = 0
+        self.current_program_lineno = linenos[0]
+
+        if lineno is not None:
+            current_line_index = linenos.index(lineno)
+            self.current_program_lineno = lineno
+
+        while True:
+            if self.current_program_lineno is not None:
+                current_line_index = linenos.index(self.current_program_lineno)
+
+            else:
+                try:
+                    current_line_index += 1
+                    self.current_program_lineno = linenos[current_line_index]
+
+                except IndexError:
+                    break
+
+            current_program_line = self.program[self.current_program_lineno]
+            self.last_program_lineno = self.current_program_lineno
+            self.current_program_lineno = None
+            self.interpret(current_program_line)
+
+        self.running_program = False
+
+    def goto(self, expr):
+        try:
+            int(expr)
+
+        except ValueError:
+            raise SyntaxError('Type mismatch error')
+
+        if not self.running_program:
+            self.run_program(lineno=int(expr))
+
+        else:
+            self.current_program_lineno = int(expr)
 
     def conditional(self, expr, then_statements, else_statement=None):
         if self.evaluate(expr):

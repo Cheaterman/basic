@@ -36,4 +36,8 @@ if __name__ == '__main__':
         except SyntaxError as exception:
             print(type(exception).__name__ + ':', exception)
 
+        except KeyboardInterrupt:
+            if interpreter.running_program:
+                print(f'Break in {interpreter.last_program_lineno}')
+
     print('Bye!')

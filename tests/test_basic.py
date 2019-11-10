@@ -253,6 +253,7 @@ def test_interpreter_remove_program_line(interpreter, line_number):
         (('10.2 A = 5', 'LIST'), '10 .2 A = 5'),
         (('10 A = 1', '20 A = A + 2', 'LIST'), '10 A = 1\n20 A = A + 2'),
         (('20 A = A + 2', '10 A = 1', 'LIST'), '10 A = 1\n20 A = A + 2'),
+        (('10 A = 5', 'LIST : PRINT "A"'), '10 A = 5'),
     )
 )
 def test_interpreter_list(capsys, interpreter, expected_output):
@@ -378,3 +379,36 @@ def test_empty_statement(capsys, interpreter):
 def test_identifier_only_statement_invalid(interpreter):
     with pytest.raises(SyntaxError):
         interpreter.interpret('ABCDEF')
+
+
+@pytest.mark.parametrize(
+    'interpreter, expected_output',
+    indirect=['interpreter'],
+    argvalues=(
+        ('RUN', ''),
+        (('10 PRINT "A"', 'RUN'), 'A'),
+        (('10 PRINT "A"', '20 PRINT "B"', 'RUN'), 'A\nB'),
+    )
+)
+def test_interpreter_run(capsys, interpreter, expected_output):
+    captured = capsys.readouterr()
+    assert captured.out == expected_output + ('\n' if expected_output else '')
+
+
+@pytest.mark.parametrize(
+    'interpreter, expected_output',
+    indirect=['interpreter'],
+    argvalues=(
+        (('10 PRINT "A"', 'GOTO 10'), 'A'),
+        (('10 PRINT "A"', '20 PRINT "B"', '30 PRINT "C"', 'GOTO 20'), 'B\nC'),
+        (('10 GOTO 20', '20 PRINT "B"', '30 PRINT "C"', 'GOTO 10'), 'B\nC'),
+    )
+)
+def test_interpreter_goto(capsys, interpreter, expected_output):
+    captured = capsys.readouterr()
+    assert captured.out == expected_output + '\n'
+
+
+def test_goto_invalid_argument(interpreter):
+    with pytest.raises(SyntaxError):
+        interpreter.interpret('GOTO "ABC"')
