@@ -110,14 +110,14 @@ class LineLexer(Lexer):
 class BasicParser(Parser):
     tokens = BasicLexer.tokens.union(LineLexer.tokens)
     precedence = (
+        ('nonassoc', IF, THEN),
         ('left', COLON),
-        ('left', IF, THEN),
-        ('left', ELSE),
+        ('nonassoc', ELSE),
         ('left', EQUALS),
         ('left', CREATE_EXPRS, APPEND_EXPRS),
         ('left', PLUS, MINUS),
         ('left', MULTIPLY, DIVIDE),
-        ('right', UNARY_MINUS),
+        ('nonassoc', UNARY_MINUS),
     )
 
     def __init__(self, interpreter):
@@ -141,19 +141,16 @@ class BasicParser(Parser):
     def statement(self, parsed):
         return Statement('remove_program_line', [parsed.LINENO])
 
-    @_(
-        'IF expr THEN statement',
-        'IF expr THEN statement ELSE statement',
-    )
+    @_('IF expr THEN statements')
     def statement(self, parsed):
-        if len(parsed) <= 5:
-            return Statement('conditional', (parsed.expr, parsed.statement))
+        return Statement('conditional', (parsed.expr, parsed.statements))
 
-        else:
-            return Statement(
-                'conditional',
-                (parsed.expr, parsed.statement0, parsed.statement1),
-            )
+    @_('IF expr THEN statements ELSE statement')
+    def statement(self, parsed):
+        return Statement(
+            'conditional',
+            (parsed.expr, parsed.statements, parsed.statement),
+        )
 
     @_('variable EQUALS expr')
     def statement(self, parsed):
@@ -241,7 +238,9 @@ class BasicInterpreter:
         try:
             statements = self.parser.parse(self.lexer.tokenize(line))
         except EOFError:
-            return
+            if line.strip(' :').startswith('REM'):
+                return
+            raise SyntaxError('Unexpected EOF')
 
         for statement in statements:
             self.execute(*statement)
@@ -286,7 +285,11 @@ class BasicInterpreter:
                     return self.visit(next_node)
 
     def visit(self, node):
-        if not isinstance(node, Expression):
+        if isinstance(node, float):
+            int_node = int(node)
+            return int_node if math.isclose(int_node, node) else node
+
+        elif not isinstance(node, Expression):
             return node
 
         return self.execute(*node)
@@ -321,9 +324,10 @@ class BasicInterpreter:
     def remove_program_line(self, lineno):
         self.program.pop(lineno, None)
 
-    def conditional(self, expr, then_statement, else_statement=None):
+    def conditional(self, expr, then_statements, else_statement=None):
         if self.evaluate(expr):
-            self.execute(*then_statement)
+            for statement in then_statements:
+                self.execute(*statement)
 
         elif else_statement:
             self.execute(*else_statement)

@@ -288,6 +288,7 @@ def test_rem_syntax_error(interpreter):
         ('PRINT "A" : REMTHISISIGNORED', 'A'),
         ('REM THIS IS IGNORED', ''),
         ('  REM THIS IS IGNORED', ''),
+        (': REM THIS IS IGNORED', ''),
     )
 )
 def test_rem_ignored(capsys, interpreter, expected_output):
@@ -303,6 +304,9 @@ def test_rem_ignored(capsys, interpreter, expected_output):
         ('IF 0 THEN PRINT "B" ELSE PRINT "C"', 'C'),
         ('IF 0 THEN PRINT "B"', ''),
         ('IF 1 THEN PRINT "B"', 'B'),
+        ('IF 1 THEN PRINT "A":PRINT "B" ELSE PRINT "C":PRINT "D"', 'A\nB\nD'),
+        ('IF 1 THEN PRINT "B":PRINT"C"', 'B\nC'),
+        ('IF 0 THEN PRINT "B":PRINT"C"', ''),
     )
 )
 def test_conditionals(capsys, interpreter, expected_output):
@@ -316,8 +320,7 @@ def test_conditionals(capsys, interpreter, expected_output):
     argvalues=(
         ('PRINT 3 + 5 * -2', '-7'),
         ('PRINT 3 - 4 * 5', '-17'),
-        # FIXME: Should round automagically for output
-        ('PRINT 3 - 10 / 5', '1.0'),
+        ('PRINT 3 - 10 / 5', '1'),
     )
 )
 def test_extra_arithmetic(capsys, interpreter, expected_output):
@@ -369,3 +372,8 @@ def test_multiple_statements(capsys, interpreter, expected_output):
 def test_empty_statement(capsys, interpreter):
     captured = capsys.readouterr()
     assert captured.out == ''
+
+
+def test_identifier_only_statement_invalid(interpreter):
+    with pytest.raises(SyntaxError):
+        interpreter.interpret('ABCDEF')

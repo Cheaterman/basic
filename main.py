@@ -15,9 +15,13 @@ if __name__ == '__main__':
     interpreter = BasicInterpreter()
 
     while True:
+        line = ''
+
         try:
             print('\nReady')
-            line = input()
+
+            while not line:
+                line = input()
 
         except KeyboardInterrupt:
             print()
@@ -26,6 +30,10 @@ if __name__ == '__main__':
         except EOFError:
             break
 
-        interpreter.interpret(line)
+        try:
+            interpreter.interpret(line)
+
+        except SyntaxError as exception:
+            print(type(exception).__name__ + ':', exception)
 
     print('Bye!')
