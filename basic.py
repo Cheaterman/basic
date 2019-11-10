@@ -333,7 +333,7 @@ class BasicInterpreter:
             self.execute(*else_statement)
 
     def list(self):
-        for lineno, line in self.program.items():
+        for lineno, line in sorted(self.program.items()):
             print(f'{lineno} {line}')
 
     def print(self, *args):

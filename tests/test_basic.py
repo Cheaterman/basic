@@ -252,6 +252,7 @@ def test_interpreter_remove_program_line(interpreter, line_number):
         (('10     A = 5', 'LIST'), '10 A = 5'),
         (('10.2 A = 5', 'LIST'), '10 .2 A = 5'),
         (('10 A = 1', '20 A = A + 2', 'LIST'), '10 A = 1\n20 A = A + 2'),
+        (('20 A = A + 2', '10 A = 1', 'LIST'), '10 A = 1\n20 A = A + 2'),
     )
 )
 def test_interpreter_list(capsys, interpreter, expected_output):
