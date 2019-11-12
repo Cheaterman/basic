@@ -76,19 +76,22 @@ def lexer():
         ('PRINT"A"REM', (
             ('PRINT', 'PRINT'),
             ('STRING', 'A'),
-            # This is supposed to be caught by parser as syntax error
-            ('ID', 'REM'),
+            ('REM', 'REM'),
         )),
         ('PRINT"A":REMTHISISIGNORED', (
             ('PRINT', 'PRINT'),
             ('STRING', 'A'),
+            ('COLON', ':'),
+            ('REM', 'REMTHISISIGNORED'),
         )),
         ('PRINT "A" : REMTHISISIGNORED', (
             ('PRINT', 'PRINT'),
             ('STRING', 'A'),
+            ('COLON', ':'),
+            ('REM', 'REMTHISISIGNORED'),
         )),
-        ('REM THIS IS IGNORED', []),
-        ('  REM THIS IS IGNORED', []),
+        ('REM THIS IS IGNORED', [('REM', 'REM THIS IS IGNORED')]),
+        ('  REM THIS IS IGNORED', [('REM', 'REM THIS IS IGNORED')]),
         ('IF A THEN PRINT "B" ELSE PRINT "C"', (
             ('IF', 'IF'),
             ('ID', 'A'),
@@ -291,6 +294,7 @@ def test_rem_syntax_error(interpreter):
         ('REM THIS IS IGNORED', ''),
         ('  REM THIS IS IGNORED', ''),
         (': REM THIS IS IGNORED', ''),
+        ("' THIS IS IGNORED", ''),
     )
 )
 def test_rem_ignored(capsys, interpreter, expected_output):

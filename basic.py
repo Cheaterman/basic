@@ -13,6 +13,7 @@ Statement = collections.namedtuple('Statement', ['operation', 'arguments'])
 class BasicLexer(Lexer):
     tokens = {
         ID,
+        REM,
         PRINT,
         IF,
         THEN,
@@ -32,17 +33,6 @@ class BasicLexer(Lexer):
     }
 
     ignore = ' '
-    ignore_comments = '(?:: *)?REM.*'
-
-    def ignore_comments(self, token):
-        if(
-            token.index
-            and self.text[:token.index] != token.index * ' '
-            and not token.value.startswith(':')
-        ):
-            # These will be rejected by the parser
-            token.type = 'ID'
-            return token
 
     PLUS = r'\+'
     MINUS = r'-'
@@ -51,6 +41,7 @@ class BasicLexer(Lexer):
     EQUALS = r'='
     COLON = r':'
 
+    REM = r"(?:REM|').*"
     PRINT = r'PRINT'
     IF = r'IF'
     THEN = r'THEN'
@@ -137,6 +128,17 @@ class BasicParser(Parser):
         parsed.statements.append(parsed.statement)
         return parsed.statements
 
+    @_(
+        'statements COLON empty',
+        'empty COLON statements',
+    )
+    def statements(self, parsed):
+        return parsed.statements
+
+    @_('')
+    def empty(self, parsed):
+        pass
+
     @_('LINENO LINE')
     def statement(self, parsed):
         return Statement('add_program_line', (parsed.LINENO, parsed.LINE))
@@ -159,6 +161,10 @@ class BasicParser(Parser):
     @_('variable EQUALS expr')
     def statement(self, parsed):
         return Statement('set_variable', (parsed.variable.name, parsed.expr))
+
+    @_('REM')
+    def statement(self, parsed):
+        return Statement('noop', [])
 
     @_('PRINT exprs')
     def statement(self, parsed):
@@ -225,9 +231,6 @@ class BasicParser(Parser):
 
     @_('ID')
     def variable(self, parsed):
-        if parsed.ID.startswith('REM'):
-            raise SyntaxError('REM is a reserved keyword')
-
         return Variable(parsed.ID)
 
     def error(self, token):
@@ -252,9 +255,6 @@ class BasicInterpreter:
             statements = self.parser.parse(self.lexer.tokenize(line))
 
         except EOFError:
-            if line.strip(' :').startswith('REM'):
-                return
-
             raise SyntaxError('Unexpected EOF')
 
         for statement in statements:
@@ -294,23 +294,28 @@ class BasicInterpreter:
                     node = next_node.arguments[1]
 
                 elif argument_index_stack:
-                    last_visited_node = evaluation_stack.pop()
                     evaluation_stack[-1].arguments[
                         argument_index_stack.pop()
-                    ] = self.visit(next_node)
+                    ] = last_visited_node = self.visit(evaluation_stack.pop())
 
                 else:
                     return self.visit(next_node)
 
     def visit(self, node):
-        if isinstance(node, float):
-            int_node = int(node)
-            return int_node if math.isclose(int_node, node) else node
+        return_value = node
 
-        elif not isinstance(node, Expression):
-            return node
+        if isinstance(node, Expression):
+            return_value = self.execute(*node)
 
-        return self.execute(*node)
+        if isinstance(return_value, float):
+            int_return_value = int(return_value)
+            return_value = (
+                int_return_value
+                if math.isclose(int_return_value, return_value)
+                else return_value
+            )
+
+        return return_value
 
     def negative(self, a):
         return -a
@@ -396,9 +401,12 @@ class BasicInterpreter:
         elif else_statement:
             self.execute(*else_statement)
 
-    def list(self):
-        for lineno, line in sorted(self.program.items()):
-            print(f'{lineno} {line}')
+    def noop(self):
+        pass
 
     def print(self, *args):
         print(*(self.evaluate(arg) for arg in args))
+
+    def list(self):
+        for lineno, line in sorted(self.program.items()):
+            print(f'{lineno} {line}')
