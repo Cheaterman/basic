@@ -326,7 +326,8 @@ def test_conditionals(capsys, interpreter, expected_output):
     argvalues=(
         ('PRINT 3 + 5 * -2', '-7'),
         ('PRINT 3 - 4 * 5', '-17'),
-        ('PRINT 3 - 10 / 5', '1'),
+        ('PRINT 3 - 10 / 5', '1.0'),
+        ('PRINT 0.1 + 0.2', '0.3'),
     )
 )
 def test_extra_arithmetic(capsys, interpreter, expected_output):
