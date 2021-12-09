@@ -30,6 +30,8 @@ class BasicLexer(Lexer):
         DIVIDE,
         EQUALS,
         COLON,
+        LPAREN,
+        RPAREN
     }
 
     ignore = ' '
@@ -40,6 +42,8 @@ class BasicLexer(Lexer):
     DIVIDE = r'/'
     EQUALS = r'='
     COLON = r':'
+    LPAREN = r'\('
+    RPAREN = r'\)'
 
     REM = r"(?:REM|').*"
     PRINT = r'PRINT'
@@ -198,6 +202,10 @@ class BasicParser(Parser):
     @_('MINUS expr %prec UNARY_MINUS')
     def expr(self, parsed):
         return Expression('negative', [parsed.expr])
+
+    @_('LPAREN expr RPAREN')
+    def expr(self, parsed):
+        return parsed.expr
 
     @_('expr PLUS expr')
     def expr(self, parsed):
